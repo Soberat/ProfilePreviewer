@@ -83,11 +83,13 @@ class Sensor(QObject):
         self.finished.emit()
 
     def generate_colormap(self):
-        colors = np.empty((np.size(self.pointsArray), 4))
+        colors = np.empty((np.shape(self.pointsArray)[0], 4))
         maxZ = np.max(self.pointsArray[:, 2])
         maxY = np.max(self.pointsArray[:, 1])
-        for i in range(len(self.pointsArray[:, 2])):
-            val = np.exp(0.04 * (self.pointsArray[i, 2] - maxZ))
-            colors[i] = (1 - val, val, self.pointsArray[i, 1] / maxY, 0.5)
+        norm = np.exp(0.04 * (self.pointsArray[:, 2] - maxZ))
+        normY = self.pointsArray[:, 1] / maxY
+        for i in range(np.shape(colors)[0]):
+            val = norm[i]
+            colors[i] = (1 - val, val, normY[i], 0.5)
 
         return colors
