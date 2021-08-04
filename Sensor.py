@@ -44,12 +44,10 @@ class Sensor(QObject):
         y = np.linspace(0, shape[1], shape[1]) * self.yStep
 
         self.pointsArray = np.zeros((shape[0] * shape[1], 3))
-        for i in range(shape[0]):
-            for j in range(shape[1]):
-                idx = i * shape[1] + j
-                self.pointsArray[idx, 0] = x[i]
-                self.pointsArray[idx, 1] = y[j]
-                self.pointsArray[idx, 2] = self.imageArray[i, j]
+        self.pointsArray[:, 0] = np.repeat(x, shape[1])
+        self.pointsArray[:, 1] = np.tile(y, shape[0])
+        self.pointsArray[:, 2] = np.reshape(self.imageArray, (shape[0]*shape[1]))
+        
         t2 = time.time()
         print(f"{t2-t1=}")
         yOffset = np.max(self.pointsArray[:, 1])
