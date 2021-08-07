@@ -25,6 +25,7 @@ class MainWindow(QMainWindow):
         self.pathEdit.setMaximumWidth(600)
         self.pathEdit.setContentsMargins(5, 0, 10, 0)
         self.pathEdit.setReadOnly(True)
+        self.pathEdit.setText(os.path.dirname(__file__))
 
         self.pathButton = QPushButton("Wybierz folder")
         self.pathButton.clicked.connect(self.choose_folder)
