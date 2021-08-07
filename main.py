@@ -7,8 +7,7 @@ from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QApplication, QHBoxLay
 from pyqtgraph import ImageView
 from pyqtgraph import opengl as gl
 import numpy as np
-from Sensor import Sensor
-import time
+from Sensor import Sensor, ColormapWorker
 from watchdog.observers import Observer
 from watchdog.events import RegexMatchingEventHandler
 
@@ -44,6 +43,7 @@ class MainWindow(QMainWindow):
         tb.addWidget(self.pathEdit)
         tb.addWidget(self.pathButton)
         self.addToolBar(tb)
+        self.showMaximized()
 
     def choose_folder(self):
         folderPath = str(QFileDialog.getExistingDirectory(self, "Wybierz folder do obserwowania"))
@@ -258,8 +258,8 @@ class MainWidget(QWidget):
 
         self.imageView.setImage(np.concatenate((self.s1.imageArray, self.s2.imageArray)))
 
-        self.view1.setData(pos=self.s1.pointsArray, color=self.s1.generate_colormap())
-        self.view2.setData(pos=self.s2.pointsArray, color=self.s2.generate_colormap())
+        self.apply_sensor1_values()
+        self.apply_sensor2_values()
 
     def update_sensor1_values(self):
         self.s1.xOffset = self.sensor1XOffsetSpinbox.value()
@@ -309,13 +309,37 @@ class MainWidget(QWidget):
         self.sensor2YAngleSpinbox.setValue(0.0)
         self.sensor2ZAngleSpinbox.setValue(0.0)
 
+    def save_colormap1(self, colormap):
+        self.s1.colormap = colormap
+
+    def save_colormap2(self, colormap):
+        self.s2.colormap = colormap
+
     def apply_sensor1_values(self):
         self.s1.transform()
-        self.view1.setData(pos=self.s1.pointsArray, color=self.s1.generate_colormap())
+        self.thread1 = QThread()
+        self.worker1 = ColormapWorker(self.s1.pointsArray)
+        self.worker1.moveToThread(self.thread1)
+        self.thread1.started.connect(self.worker1.generate_colormap)
+        self.worker1.finished.connect(self.save_colormap1)
+        self.worker1.finished.connect(lambda: self.view1.setData(pos=self.s1.pointsArray, color=self.s1.colormap))
+        self.worker1.finished.connect(self.thread1.quit)
+        self.worker1.finished.connect(self.worker1.deleteLater)
+        self.thread1.finished.connect(self.thread1.deleteLater)
+        self.thread1.start()
 
     def apply_sensor2_values(self):
         self.s2.transform()
-        self.view2.setData(pos=self.s2.pointsArray, color=self.s2.generate_colormap())
+        self.thread2 = QThread()
+        self.worker2 = ColormapWorker(self.s2.pointsArray)
+        self.worker2.moveToThread(self.thread2)
+        self.thread2.started.connect(self.worker2.generate_colormap)
+        self.worker2.finished.connect(self.save_colormap2)
+        self.worker2.finished.connect(lambda: self.view2.setData(pos=self.s2.pointsArray, color=self.s2.colormap))
+        self.worker2.finished.connect(self.thread2.quit)
+        self.worker2.finished.connect(self.worker2.deleteLater)
+        self.thread2.finished.connect(self.thread2.deleteLater)
+        self.thread2.start()
 
 
 if __name__ == "__main__":

@@ -2,17 +2,37 @@ import time
 
 import PIL.Image
 import numpy as np
-from PyQt5.QtCore import QObject, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import pyqtSignal, QObject, pyqtSlot
 from scipy.ndimage import median_filter
 from scipy.spatial.transform import Rotation
 
 
-class Sensor(QObject):
+class ColormapWorker(QObject):
+
+    finished = pyqtSignal(np.ndarray)
+
+    def __init__(self, pointsArray):
+        super().__init__()
+        self.pointsArray = pointsArray
+
+    @pyqtSlot()
+    def generate_colormap(self):
+        colors = np.empty((np.shape(self.pointsArray)[0], 4))
+        maxZ = np.max(self.pointsArray[:, 2])
+        maxY = np.max(self.pointsArray[:, 1])
+        norm = np.exp(0.04 * (self.pointsArray[:, 2] - maxZ))
+        normY = self.pointsArray[:, 1] / maxY
+        for i in range(np.shape(colors)[0]):
+            val = norm[i]
+            colors[i] = (1 - val, val, normY[i], 0.5)
+
+        self.finished.emit(colors)
+
+
+class Sensor:
     xStep = 0.219
     yStep = 1
     zStep = 0.006
-
-    finished = pyqtSignal()
 
     def __init__(self, prefix, isOffset=False):
         super().__init__()
@@ -27,15 +47,14 @@ class Sensor(QObject):
         self.imageArray = None
         self.unprocessedPointsArray = None
         self.pointsArray = None
+        self.colormap = None
         self.isOffset = isOffset
 
     def open_image(self, path: str):
         self.imageArray = np.asarray(PIL.Image.open(path).transpose(PIL.Image.ROTATE_270))
 
-    @pyqtSlot()
     def process_image(self):
         shape = np.shape(self.imageArray)
-        t1 = time.time()
         self.imageArray[self.imageArray == 0] = self.maxVal
         self.imageArray = self.imageArray * -self.zStep
         self.imageArray = median_filter(self.imageArray, size=5)
@@ -47,14 +66,11 @@ class Sensor(QObject):
         self.pointsArray[:, 0] = np.repeat(x, shape[1])
         self.pointsArray[:, 1] = np.tile(y, shape[0])
         self.pointsArray[:, 2] = np.reshape(self.imageArray, (shape[0]*shape[1]))
-        
-        t2 = time.time()
-        print(f"{t2-t1=}")
+
         yOffset = np.max(self.pointsArray[:, 1])
         zOffset = np.mean(self.pointsArray[np.where((self.pointsArray[:, 1] == np.max(self.pointsArray[:, 1]))), 2])
-        self.pointsArray[:, 1] = self.pointsArray[:, 1] - yOffset
+        self.pointsArray[:, 1] = -(self.pointsArray[:, 1] - yOffset)
         self.pointsArray[:, 2] = self.pointsArray[:, 2] - zOffset
-        self.pointsArray[:, 1] = -self.pointsArray[:, 1]
 
         if self.isOffset:
             self.pointsArray[:, 0] -= np.max(self.pointsArray[:, 0])
@@ -80,16 +96,3 @@ class Sensor(QObject):
         self.pointsArray[:, 1] += self.yOffset
         self.pointsArray[:, 2] += self.zOffset
 
-        self.finished.emit()
-
-    def generate_colormap(self):
-        colors = np.empty((np.shape(self.pointsArray)[0], 4))
-        maxZ = np.max(self.pointsArray[:, 2])
-        maxY = np.max(self.pointsArray[:, 1])
-        norm = np.exp(0.04 * (self.pointsArray[:, 2] - maxZ))
-        normY = self.pointsArray[:, 1] / maxY
-        for i in range(np.shape(colors)[0]):
-            val = norm[i]
-            colors[i] = (1 - val, val, normY[i], 0.5)
-
-        return colors
