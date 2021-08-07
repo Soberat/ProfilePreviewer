@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
         self.showMaximized()
 
     def choose_folder(self):
-        folderPath = str(QFileDialog.getExistingDirectory(self, "Wybierz folder do obserwowania"))
+        folderPath = str(QFileDialog.getExistingDirectory(self, "Wybierz folder do obserwowania", directory=self.pathEdit.text()))
         if len(folderPath) != 0:
             if os.access(folderPath, os.R_OK):
                 self.observer.unschedule_all()
