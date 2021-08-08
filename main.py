@@ -4,7 +4,7 @@ import os
 from PyQt5.QtCore import Qt, pyqtSignal, QThread, QModelIndex
 from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QApplication, QHBoxLayout, QGroupBox, \
     QFormLayout, QPushButton, QTabWidget, QDoubleSpinBox, QMainWindow, QToolBar, QLineEdit, QFileDialog, QListWidget, \
-    QListView, QCheckBox
+    QListView, QCheckBox, QErrorMessage
 from pyqtgraph import ImageView
 from pyqtgraph import opengl as gl
 import numpy as np
@@ -32,6 +32,7 @@ class MainWindow(QMainWindow):
 
         self.mainWidget = MainWidget()
         self.mainWidget.fileList.itemSelectionChanged.connect(self.selection_changed)
+        self.mainWidget.refreshRequired.connect(self.update_file_list)
 
         self.observer = Observer()
         self.observer.start()
@@ -80,12 +81,16 @@ class MainWindow(QMainWindow):
             secondFileName = "Sensor" + suffix
 
         if firstFileName in fileList and secondFileName in fileList:
+            if self.mainWidget.fileList.item(0).text().startswith("Brak"):
+                self.mainWidget.fileList.clear()
             self.mainWidget.fileList.addItem(firstFileName.replace("Sensor1", ""))
-            self.ready.emit(self.pathEdit.text() + f"/{secondFileName}",
-                            self.pathEdit.text() + f"/{firstFileName}")
+            if self.autoSwitchCheckbox.isChecked():
+                self.mainWidget.fileList.setCurrentRow(self.mainWidget.fileList.count()-1)
+                self.ready.emit(self.pathEdit.text() + f"/{secondFileName}", self.pathEdit.text() + f"/{firstFileName}")
 
     def update_file_list(self):
         # Clear the list of old items
+        self.mainWidget.fileList.itemSelectionChanged.disconnect()
         self.mainWidget.fileList.clear()
 
         # List files in path and those that begin with Sensor1
@@ -101,16 +106,20 @@ class MainWindow(QMainWindow):
         # If there are no proper pairs of images in the folder, add single item informing the user of that
         if self.mainWidget.fileList.count() == 0:
             self.mainWidget.fileList.addItem("Brak plików w folderze!")
+        self.mainWidget.fileList.itemSelectionChanged.connect(self.selection_changed)
 
     def selection_changed(self):
-        self.mainWidget.update_image_view(f"{self.pathEdit.text()}/Sensor2{self.mainWidget.fileList.currentItem().text()}",
-                                          f"{self.pathEdit.text()}/Sensor1{self.mainWidget.fileList.currentItem().text()}")
+        if self.mainWidget.fileList.currentItem().text().endswith(".png"):
+            self.mainWidget.update_image_view(f"{self.pathEdit.text()}/Sensor2{self.mainWidget.fileList.currentItem().text()}",
+                                              f"{self.pathEdit.text()}/Sensor1{self.mainWidget.fileList.currentItem().text()}")
 
 
 class MainWidget(QWidget):
     SCALE = 0.5
     POINT_SIZE = 0.1
     Y_STEP = 1
+
+    refreshRequired = pyqtSignal()
 
     def __init__(self):
         super().__init__()
@@ -311,8 +320,14 @@ class MainWidget(QWidget):
                 self.apply_sensor2_values()
 
     def update_image_view(self, im1: str, im2: str):
-        self.s1.open_image(im1)
-        self.s2.open_image(im2)
+        try:
+            self.s1.open_image(im1)
+            self.s2.open_image(im2)
+        except FileNotFoundError as fnfe:
+            dialog = QErrorMessage()
+            dialog.showMessage(str(fnfe))
+            dialog.exec_()
+            self.refreshRequired.emit()
 
         maxVal = np.max((np.max(self.s1.imageArray), np.max(self.s2.imageArray)))
         self.s1.maxVal = maxVal
