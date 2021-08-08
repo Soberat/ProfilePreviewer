@@ -168,6 +168,8 @@ class MainWidget(QWidget):
         self.setLayout(masterLayout)
 
     def create_left_column(self):
+        COLUMN_WIDTH = 250
+
         masterLayout = QVBoxLayout()
         groupR = QGroupBox("Sensor 1 (Lewy)")
 
@@ -182,7 +184,7 @@ class MainWidget(QWidget):
         layout.addRow(self.sensor1ResetButton, self.sensor1ApplyButton)
 
         groupR.setLayout(layout)
-        groupR.setMaximumSize(230, 300)
+        groupR.setMaximumSize(COLUMN_WIDTH, 300)
         masterLayout.addWidget(groupR, alignment=Qt.AlignTop)
 
         groupL = QGroupBox("Sensor 2 (Prawy)")
@@ -198,7 +200,7 @@ class MainWidget(QWidget):
         layout.addRow(self.sensor2ResetButton, self.sensor2ApplyButton)
 
         groupL.setLayout(layout)
-        groupL.setMaximumSize(230, 300)
+        groupL.setMaximumSize(COLUMN_WIDTH, 300)
         masterLayout.addWidget(groupL, alignment=Qt.AlignTop)
 
         groupCam = QGroupBox("Sterowanie widokiem 3D")
@@ -211,7 +213,7 @@ class MainWidget(QWidget):
         layout.addWidget(QLabel("<b> Ctrl + Rolka</b> - zmiana pola widzenia"))
 
         groupCam.setLayout(layout)
-        groupCam.setMaximumWidth(230)
+        groupCam.setMaximumWidth(COLUMN_WIDTH)
         masterLayout.addWidget(groupCam, alignment=Qt.AlignTop)
 
         masterLayout.setStretch(2, 100)
