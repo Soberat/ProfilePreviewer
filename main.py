@@ -23,7 +23,6 @@ class MainWindow(QMainWindow):
         self.pathEdit = QLineEdit()
         self.pathEdit.setMinimumWidth(400)
         self.pathEdit.setMaximumWidth(600)
-        self.pathEdit.setContentsMargins(5, 0, 10, 0)
         self.pathEdit.setReadOnly(True)
         self.pathEdit.setText(os.path.dirname(__file__))
 
@@ -40,9 +39,13 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.mainWidget)
         self.ready.connect(self.mainWidget.update_image_view)
 
+        self.autoSwitchCheckbox = QCheckBox("Automatycznie wyświetlaj nowe obrazy")
+
         tb = QToolBar()
+        tb.layout().setSpacing(10)
         tb.addWidget(self.pathEdit)
         tb.addWidget(self.pathButton)
+        tb.addWidget(self.autoSwitchCheckbox)
         self.addToolBar(tb)
         self.showMaximized()
 
