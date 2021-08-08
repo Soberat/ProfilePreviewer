@@ -49,16 +49,19 @@ class Sensor:
         self.pointsArray = None
         self.colormap = None
         self.isOffset = isOffset
+        self.processed3d = False
 
     def open_image(self, path: str):
+        self.processed3d = False
         self.imageArray = np.asarray(PIL.Image.open(path).transpose(PIL.Image.ROTATE_270))
 
-    def process_image(self):
-        shape = np.shape(self.imageArray)
+    def process_image2d(self):
         self.imageArray[self.imageArray == 0] = self.maxVal
         self.imageArray = self.imageArray * -self.zStep
         self.imageArray = median_filter(self.imageArray, size=5)
 
+    def process_image3d(self):
+        shape = np.shape(self.imageArray)
         x = np.linspace(0, shape[0], shape[0]) * self.xStep
         y = np.linspace(0, shape[1], shape[1]) * self.yStep
 
@@ -78,6 +81,7 @@ class Sensor:
         self.unprocessedPointsArray = self.pointsArray.copy()
 
         self.transform()
+        self.processed3d = True
 
     def transform(self):
         self.pointsArray = self.unprocessedPointsArray.copy()

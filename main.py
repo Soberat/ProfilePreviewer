@@ -1,9 +1,10 @@
 import re
 import sys
 import os
-from PyQt5.QtCore import Qt, pyqtSignal, QThread
+from PyQt5.QtCore import Qt, pyqtSignal, QThread, QModelIndex
 from PyQt5.QtWidgets import QWidget, QLabel, QVBoxLayout, QApplication, QHBoxLayout, QGroupBox, \
-    QFormLayout, QPushButton, QTabWidget, QDoubleSpinBox, QMainWindow, QToolBar, QLineEdit, QFileDialog
+    QFormLayout, QPushButton, QTabWidget, QDoubleSpinBox, QMainWindow, QToolBar, QLineEdit, QFileDialog, QListWidget, \
+    QListView, QCheckBox
 from pyqtgraph import ImageView
 from pyqtgraph import opengl as gl
 import numpy as np
@@ -30,6 +31,7 @@ class MainWindow(QMainWindow):
         self.pathButton.clicked.connect(self.choose_folder)
 
         self.mainWidget = MainWidget()
+        self.mainWidget.fileList.itemSelectionChanged.connect(self.selection_changed)
 
         self.observer = Observer()
         self.observer.start()
@@ -49,6 +51,12 @@ class MainWindow(QMainWindow):
         self.addToolBar(tb)
         self.showMaximized()
 
+        self.update_file_list()
+
+        if self.mainWidget.fileList.item(0).text().endswith(".png"):
+            self.mainWidget.fileList.setCurrentRow(0)
+            self.mainWidget.update_image_view(f"{self.pathEdit.text()}\\Sensor2{self.mainWidget.fileList.item(0).text()}", f"{self.pathEdit.text()}\\Sensor1{self.mainWidget.fileList.item(0).text()}")
+
     def choose_folder(self):
         folderPath = str(QFileDialog.getExistingDirectory(self, "Wybierz folder do obserwowania", directory=self.pathEdit.text()))
         if len(folderPath) != 0:
@@ -56,6 +64,7 @@ class MainWindow(QMainWindow):
                 self.observer.unschedule_all()
                 self.pathEdit.setText(folderPath)
                 self.observer.schedule(self.eventHandler, folderPath, recursive=False)
+                self.update_file_list()
             else:
                 self.pathEdit.setText("Brak uprawnień do folderu")
 
@@ -71,8 +80,31 @@ class MainWindow(QMainWindow):
             secondFileName = "Sensor" + suffix
 
         if firstFileName in fileList and secondFileName in fileList:
+            self.mainWidget.fileList.addItem(firstFileName.replace("Sensor1", ""))
             self.ready.emit(self.pathEdit.text() + f"/{secondFileName}",
                             self.pathEdit.text() + f"/{firstFileName}")
+
+    def update_file_list(self):
+        # Clear the list of old items
+        self.mainWidget.fileList.clear()
+
+        # List files in path and those that begin with Sensor1
+        files = [file for file in os.listdir(self.pathEdit.text()) if re.match(r"^Sensor[12][_0-9]+.png$", file)]
+        onlyS1 = [file for file in files if re.match(r"^Sensor1[_0-9]+.png$", file)]
+
+        for file in onlyS1:
+            secondFileName = file.replace("Sensor1", "Sensor2")
+            # If a proper pair exists, add only the suffix to the list
+            if secondFileName in files:
+                self.mainWidget.fileList.addItem(file.replace("Sensor1", ""))
+
+        # If there are no proper pairs of images in the folder, add single item informing the user of that
+        if self.mainWidget.fileList.count() == 0:
+            self.mainWidget.fileList.addItem("Brak plików w folderze!")
+
+    def selection_changed(self):
+        self.mainWidget.update_image_view(f"{self.pathEdit.text()}/Sensor2{self.mainWidget.fileList.currentItem().text()}",
+                                          f"{self.pathEdit.text()}/Sensor1{self.mainWidget.fileList.currentItem().text()}")
 
 
 class MainWidget(QWidget):
@@ -117,6 +149,7 @@ class MainWidget(QWidget):
         self.sensor1ResetButton.clicked.connect(self.reset_sensor1_values)
         self.sensor1ApplyButton = QPushButton("Zastosuj")
         self.sensor1ApplyButton.clicked.connect(self.apply_sensor1_values)
+        self.sensor1ApplyButton.setEnabled(False)
 
         self.sensor2XOffsetSpinbox = QDoubleSpinBox()
         self.sensor2XOffsetSpinbox.setRange(-1000, 1000)
@@ -152,12 +185,17 @@ class MainWidget(QWidget):
         self.sensor2ResetButton.clicked.connect(self.reset_sensor2_values)
         self.sensor2ApplyButton = QPushButton("Zastosuj")
         self.sensor2ApplyButton.clicked.connect(self.apply_sensor2_values)
+        self.sensor2ApplyButton.setEnabled(False)
+
+        self.fileList = QListWidget()
+
+        self.tabs = QTabWidget()
 
         self.imageView = ImageView()
         self.imageView.setPredefinedGradient('viridis')
         self.hostView = gl.GLViewWidget()
-        self.view1 = None
-        self.view2 = None
+        self.view1 = gl.GLScatterPlotItem(size=self.POINT_SIZE, pxMode=False)
+        self.view2 = gl.GLScatterPlotItem(size=self.POINT_SIZE, pxMode=False)
 
         self.s1 = Sensor("Sensor1", isOffset=True)
         self.s2 = Sensor("Sensor2")
@@ -216,27 +254,34 @@ class MainWidget(QWidget):
         groupCam.setMaximumWidth(COLUMN_WIDTH)
         masterLayout.addWidget(groupCam, alignment=Qt.AlignTop)
 
-        masterLayout.setStretch(2, 100)
+        groupList = QGroupBox("Pary plików w folderze")
+        layout = QVBoxLayout()
+        self.fileList.setMinimumHeight(250)
+        self.fileList.setSelectionMode(QListView.SingleSelection)
+        self.fileList.setResizeMode(QListView.Adjust)
+        self.fileList.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        layout.addWidget(self.fileList)
+        groupList.setLayout(layout)
+        groupList.setMaximumWidth(COLUMN_WIDTH)
+        masterLayout.addWidget(groupList, alignment=Qt.AlignTop)
+
+        masterLayout.setStretch(3, 100)
 
         return masterLayout
 
     def create_image_view(self):
-        tabs = QTabWidget()
-
         layout = QVBoxLayout()
         layout.addWidget(self.imageView)
 
-        tabs.addTab(self.imageView, "Widok 2D")
+        self.tabs.addTab(self.imageView, "Widok 2D")
 
         # 3D Tab
         layout = QVBoxLayout()
 
-        self.view1 = gl.GLScatterPlotItem(size=self.POINT_SIZE, pxMode=False)
         self.view1.setGLOptions('opaque')
         self.view1.scale(self.SCALE, self.SCALE, self.SCALE)
         self.hostView.addItem(self.view1)
 
-        self.view2 = gl.GLScatterPlotItem(size=self.POINT_SIZE, pxMode=False)
         self.view2.setGLOptions('opaque')
         self.view2.scale(self.SCALE, self.SCALE, self.SCALE)
         self.hostView.addItem(self.view2)
@@ -245,11 +290,25 @@ class MainWidget(QWidget):
         self.hostView.orbit(225, 180)
 
         layout.addWidget(self.hostView)
-        tabs.addTab(self.hostView, "Widok 3D")
+        self.tabs.addTab(self.hostView, "Widok 3D")
 
-        self.update_image_view(r"C:\Users\Mirek\Documents\Projects\PyCharm\ProfilePreviewer\Sensor2_2021_06_24_11_26_34_0001.png", r"C:\Users\Mirek\Documents\Projects\PyCharm\ProfilePreviewer\Sensor1_2021_06_24_11_26_34_0001.png")
+        self.tabs.currentChanged.connect(self.tab_change_handler)
 
-        return tabs
+        return self.tabs
+
+    def tab_change_handler(self):
+        if self.tabs.currentIndex() == 0:
+            self.sensor1ApplyButton.setEnabled(False)
+            self.sensor2ApplyButton.setEnabled(False)
+
+        if self.tabs.currentIndex() == 1:
+            self.sensor1ApplyButton.setEnabled(True)
+            self.sensor2ApplyButton.setEnabled(True)
+            if not self.s1.processed3d or not self.s2.processed3d:
+                self.s1.process_image3d()
+                self.s2.process_image3d()
+                self.apply_sensor1_values()
+                self.apply_sensor2_values()
 
     def update_image_view(self, im1: str, im2: str):
         self.s1.open_image(im1)
@@ -259,13 +318,22 @@ class MainWidget(QWidget):
         self.s1.maxVal = maxVal
         self.s2.maxVal = maxVal
 
-        self.s1.process_image()
-        self.s2.process_image()
+        self.s1.process_image2d()
+        self.s2.process_image2d()
+
+        if self.tabs.currentIndex() == 1:
+            self.s1.process_image3d()
+            self.s2.process_image3d()
 
         self.imageView.setImage(np.concatenate((self.s1.imageArray, self.s2.imageArray)))
 
-        self.apply_sensor1_values()
-        self.apply_sensor2_values()
+        # Delete previous 3D data
+        self.view1.setData(pos=None, color=None)
+        self.view2.setData(pos=None, color=None)
+
+        if self.tabs.currentIndex() == 1:
+            self.apply_sensor1_values()
+            self.apply_sensor2_values()
 
     def update_sensor1_values(self):
         self.s1.xOffset = self.sensor1XOffsetSpinbox.value()
