@@ -21,6 +21,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        self.setWindowTitle("ProfilePreviewer")
+
         self.pathEdit = QLineEdit()
         self.pathEdit.setMinimumWidth(400)
         self.pathEdit.setMaximumWidth(600)
